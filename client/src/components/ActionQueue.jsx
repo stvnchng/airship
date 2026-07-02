@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 const REASON_META = {
   unmatched:       { label: 'Unmatched',  instruction: 'Pick the correct tenant or dismiss.' },
   ambiguous_match: { label: 'Ambiguous',  instruction: 'Two tenants share this name and address — confirm which one.' },
-  no_filter_size:  { label: 'No size',    instruction: 'Filter size is required for the export. Add it before dismissing.' },
+  no_filter_size:  { label: 'No size',    instruction: 'Add a filter size if known, or dismiss to skip.' },
 };
 
 export default function ActionQueue({ items = [], onMatch, onIgnore, onEditSize }) {
@@ -50,9 +50,6 @@ function QueueRow({ item, onMatch, onIgnore, onEditSize }) {
     setSizeEditing(false);
   };
 
-  // no_filter_size: block dismiss until size is provided
-  const canDismiss = item.review_reason !== 'no_filter_size' || !!item.csv_size;
-
   return (
     <div style={{
       background: 'var(--surface)',
@@ -72,9 +69,6 @@ function QueueRow({ item, onMatch, onIgnore, onEditSize }) {
         <button
           className="btn-dismiss"
           onClick={() => onIgnore(item.id)}
-          disabled={!canDismiss}
-          title={canDismiss ? 'Dismiss without resolving' : 'Add filter size before dismissing'}
-          style={{ opacity: canDismiss ? 1 : 0.4, cursor: canDismiss ? 'pointer' : 'not-allowed' }}
         >
           Dismiss
         </button>

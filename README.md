@@ -108,13 +108,13 @@ The spec says to match on name, address, or a combination. We use **name + zip**
 |---|---|---|
 | `unmatched` | No tenant found with the same name + zip | Pick the correct tenant from the suggested candidates, or dismiss |
 | `ambiguous_match` | 2+ tenants share the same name and zip | Confirm which tenant this shipment belongs to, or dismiss |
-| `no_filter_size` | Matched confidently, but `custom_field_1` is blank | Enter the filter size — dismiss is blocked until saved |
+| `no_filter_size` | Matched confidently, but `custom_field_1` is blank | Enter the filter size if known, or dismiss to skip — the spec says size issues should not block processing |
 
 **Zip normalization:** ShipStation exports omit leading zeros (e.g. `3095` instead of `03095`). `normalizeZip()` strips non-digits and left-pads to 5 characters; SQL compares against `substr(zip, 1, 5)` to handle ZIP+4 suffixes.
 
 ### Filter sizes
 
-`custom_field_1` cells may contain multiple space-separated sizes (e.g. `"14x20x1 20x20x1"`). We store the raw string verbatim — the spec notes sizes "may lack the structure that a real API would require" and storing verbatim passes the value through to the export CSV unchanged. For the export, `custom_field_1` comes from the tenant's most recent `historical_shipments` row as of the export date. If no size is on record the field is blank — the `no_filter_size` review flag exists to catch this before export.
+`custom_field_1` cells may contain multiple space-separated sizes (e.g. `"14x20x1 20x20x1"`). We store the raw string verbatim — the spec notes sizes "may lack the structure that a real API would require" and storing verbatim passes the value through to the export CSV unchanged. For the export, `custom_field_1` comes from the tenant's most recent `historical_shipments` row as of the export date. If no size is on record the field is blank in the export — the `no_filter_size` review flag surfaces these rows so an operator can fill in the size, but dismiss is allowed per the spec ("capture enough information for follow-up without blocking").
 
 ### Export gates
 
