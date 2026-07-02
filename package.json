@@ -2,15 +2,13 @@
   "name": "air-filter-shipment-system",
   "version": "1.0.0",
   "description": "Shipment management system for air filter deliveries",
-  "main": "scripts/legacy-shipstation-import.js",
+  "main": "server/server.js",
   "scripts": {
     "dev:frontend": "vite",
     "dev:backend": "nodemon server/server.js",
     "start": "node server/server.js",
     "seed-fixtures": "sqlite3 database.db \".read fixtures/supplemental-fixtures.sql\"",
     "seed-properties": "node server/scripts/seed-properties.js",
-    "legacy:import": "node scripts/legacy-shipstation-import.js",
-    "legacy:parse-sizes": "node scripts/legacy-size-parser.js",
     "test": "jest --testPathPattern=server/__tests__ --runInBand",
     "test:watch": "jest --testPathPattern=server/__tests__ --runInBand --watch"
   },
