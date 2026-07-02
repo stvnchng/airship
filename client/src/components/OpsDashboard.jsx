@@ -5,6 +5,7 @@ import ExportCard from './ExportCard';
 import ActionQueue from './ActionQueue';
 import SlideOver from './SlideOver';
 import Spinner from './Spinner';
+import ConfirmDialog from './ConfirmDialog';
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -30,7 +31,7 @@ export default function OpsDashboard() {
   const [checkingEligibility, setCheckingEligibility] = useState(false);
   const [eligibilityChecked, setEligibilityChecked] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [exportNeedsConfirm, setExportNeedsConfirm] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState(null); // { title, body } | null
 
   // Slide-over state
   const [panel, setPanel]               = useState(null); // 'eligible' | 'imports'
@@ -116,7 +117,7 @@ export default function OpsDashboard() {
   };
 
   const runExport = () => {
-    setExportNeedsConfirm(false);
+    setConfirmDialog(null);
     setExporting(true);
     fetch(`/api/export?asOf=${asOf}`, { method: 'POST' })
       .then(res => {
@@ -140,8 +141,18 @@ export default function OpsDashboard() {
       toast.error('Run an eligibility check first.');
       return;
     }
+    if (metrics.awaitingReview > 0) {
+      setConfirmDialog({
+        title: 'Unresolved manual review items',
+        body: `${metrics.awaitingReview} shipment row${metrics.awaitingReview !== 1 ? 's' : ''} still need${metrics.awaitingReview === 1 ? 's' : ''} review. Exporting now may include rows with missing data or incorrect tenant links.`,
+      });
+      return;
+    }
     if (!metrics.lastImportDate) {
-      setExportNeedsConfirm(true);
+      setConfirmDialog({
+        title: 'No ShipStation data imported',
+        body: 'The eligible count may be overstated — tenants who already received a filter won\'t be excluded because no import has been done yet.',
+      });
       return;
     }
     runExport();
@@ -255,9 +266,6 @@ export default function OpsDashboard() {
             loading={checkingEligibility}
             eligibilityChecked={eligibilityChecked}
             onExport={handleExport}
-            onConfirmExport={runExport}
-            onCancelExport={() => setExportNeedsConfirm(false)}
-            needsConfirm={exportNeedsConfirm}
             exporting={exporting}
             lastExport={metrics.lastExport}
             onRedownload={handleRedownload}
@@ -327,6 +335,15 @@ export default function OpsDashboard() {
           ))
         )}
       </SlideOver>
+
+      <ConfirmDialog
+        open={!!confirmDialog}
+        title={confirmDialog?.title}
+        body={confirmDialog?.body}
+        confirmLabel="Export anyway"
+        onConfirm={runExport}
+        onCancel={() => setConfirmDialog(null)}
+      />
 
       {/* Import history panel */}
       <SlideOver

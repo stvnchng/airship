@@ -14,13 +14,14 @@ CREATE TABLE IF NOT EXISTS properties (
     shipment_interval_days INTEGER NOT NULL DEFAULT 90
 );
 
--- 3. Property-Tenant Mapping Table: Solves the overlapping tenant data and assignment array
-CREATE TABLE IF NOT EXISTS property_tenants (
+-- 3. Tenant-Property Table: one row per tenant, enforcing the one-to-many relationship
+--    the domain describes. UNIQUE on tenant_id means a second insert for the same
+--    tenant is silently ignored — first property encountered in properties.json wins.
+CREATE TABLE IF NOT EXISTS tenant_property (
+    tenant_id   INTEGER NOT NULL UNIQUE,
     property_id TEXT NOT NULL,
-    tenant_id INTEGER NOT NULL,
-    PRIMARY KEY (property_id, tenant_id),
-    FOREIGN KEY (property_id) REFERENCES properties(id),
-    FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+    FOREIGN KEY (property_id) REFERENCES properties(id)
 );
 
 -- 5. Import log — records when a ShipStation CSV was actually uploaded (not ship dates of records).

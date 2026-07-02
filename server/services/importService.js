@@ -75,7 +75,7 @@ function processImport(fileBuffer) {
     trim: true,
   });
 
-  let matched = 0, flagged = 0, skipped = 0;
+  let matched = 0, unresolved = 0, skipped = 0;
 
   db.transaction((rows) => {
     for (const row of rows) {
@@ -88,7 +88,7 @@ function processImport(fileBuffer) {
 
       const { tenantId, reviewReason } = classify(row);
       if (tenantId && !reviewReason) matched++;
-      else flagged++;
+      else unresolved++;
 
       const shipDate = row.ship_date ? row.ship_date.substring(0, 10) : null;
 
@@ -108,7 +108,7 @@ function processImport(fileBuffer) {
     }
   })(records);
 
-  return { total: records.length, matched, flagged, skipped };
+  return { total: records.length, matched, unresolved, skipped };
 }
 
 module.exports = { processImport, normalizeZip };

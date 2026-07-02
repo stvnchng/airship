@@ -16,11 +16,11 @@ router.post('/', upload.single('file'), (req, res) => {
   }
 
   try {
-    const { total, matched, flagged, skipped } = processImport(req.file.buffer);
-    logImport.run(new Date().toISOString(), total, matched, flagged);
+    const { total, matched, unresolved, skipped } = processImport(req.file.buffer);
+    logImport.run(new Date().toISOString(), total, matched, unresolved);
     res.json({
       success: true,
-      message: `Processed ${total} rows: ${matched} matched, ${flagged} flagged for review, ${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped.`,
+      message: `Processed ${total} rows: ${matched} matched, ${unresolved} flagged for review, ${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped.`,
     });
   } catch (err) {
     console.error('Import error:', err);

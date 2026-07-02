@@ -49,8 +49,8 @@ function addProperty(id = 'prop-1', intervalDays = 90) {
 
 function linkTenantProperty(tenantId, propertyId = 'prop-1') {
   testDb.prepare(
-    `INSERT OR IGNORE INTO property_tenants (property_id, tenant_id) VALUES (?, ?)`
-  ).run(propertyId, tenantId);
+    `INSERT OR IGNORE INTO tenant_property (tenant_id, property_id) VALUES (?, ?)`
+  ).run(tenantId, propertyId);
 }
 
 function addHistoricalShipment(tenantId, shipDate, trackingNum) {
@@ -72,7 +72,7 @@ afterEach(() => {
   testDb.exec(`
     DELETE FROM shipments;
     DELETE FROM historical_shipments;
-    DELETE FROM property_tenants;
+    DELETE FROM tenant_property;
     DELETE FROM enrollments;
     DELETE FROM properties;
     DELETE FROM tenants;

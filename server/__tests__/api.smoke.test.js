@@ -64,15 +64,15 @@ function addProperty(id = 'prop-1', intervalDays = 90) {
 
 function linkTenantProperty(tenantId, propertyId = 'prop-1') {
   testDb.prepare(
-    `INSERT OR IGNORE INTO property_tenants (property_id, tenant_id) VALUES (?, ?)`
-  ).run(propertyId, tenantId);
+    `INSERT OR IGNORE INTO tenant_property (tenant_id, property_id) VALUES (?, ?)`
+  ).run(tenantId, propertyId);
 }
 
 function addUnresolved() {
   testDb.prepare(
     `INSERT INTO historical_shipments
-       (tenant_id, recipient_name, address1, city, state, zip, ship_date, tracking_number, source)
-     VALUES (NULL, 'Unknown Person', '999 Nowhere', 'Anytown', 'CA', '00000', '2026-01-01', 'UNRESOLV-1', 'ShipStation Import')`
+       (tenant_id, recipient_name, address1, city, state, zip, ship_date, tracking_number, source, review_reason)
+     VALUES (NULL, 'Unknown Person', '999 Nowhere', 'Anytown', 'CA', '00000', '2026-01-01', 'UNRESOLV-1', 'ShipStation Import', 'unmatched')`
   ).run();
 }
 
@@ -84,7 +84,7 @@ afterEach(() => {
   testDb.exec(`
     DELETE FROM shipments;
     DELETE FROM historical_shipments;
-    DELETE FROM property_tenants;
+    DELETE FROM tenant_property;
     DELETE FROM enrollments;
     DELETE FROM properties;
     DELETE FROM tenants;
@@ -104,7 +104,6 @@ describe('GET /api/dashboard', () => {
     expect(res.body).toHaveProperty('queue');
     expect(res.body.metrics).toMatchObject({
       eligibleTenants: expect.any(Number),
-      pendingExport: expect.any(Number),
       awaitingReview: expect.any(Number),
       successfullyMatched: expect.any(Number),
     });

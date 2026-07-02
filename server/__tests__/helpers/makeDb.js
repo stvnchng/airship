@@ -31,10 +31,9 @@ const SCHEMA = `
     shipment_interval_days INTEGER NOT NULL DEFAULT 90
   );
 
-  CREATE TABLE IF NOT EXISTS property_tenants (
-    property_id TEXT NOT NULL,
-    tenant_id INTEGER NOT NULL,
-    PRIMARY KEY (property_id, tenant_id)
+  CREATE TABLE IF NOT EXISTS tenant_property (
+    tenant_id   INTEGER NOT NULL UNIQUE,
+    property_id TEXT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS historical_shipments (
@@ -50,7 +49,8 @@ const SCHEMA = `
     tracking_number VARCHAR NOT NULL UNIQUE,
     source VARCHAR NOT NULL,
     notes VARCHAR,
-    custom_field_1 TEXT
+    custom_field_1 TEXT,
+    review_reason TEXT
   );
 
   CREATE TABLE IF NOT EXISTS shipments (
@@ -60,6 +60,22 @@ const SCHEMA = `
     ship_date TEXT NOT NULL,
     tracking_number TEXT UNIQUE,
     source TEXT DEFAULT 'Manual Engine'
+  );
+
+  CREATE TABLE IF NOT EXISTS import_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    imported_at TEXT NOT NULL,
+    row_count   INTEGER NOT NULL,
+    matched     INTEGER NOT NULL,
+    unresolved  INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS export_batches (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    exported_at  TEXT NOT NULL,
+    as_of        TEXT NOT NULL,
+    tenant_count INTEGER NOT NULL,
+    csv_content  TEXT NOT NULL
   );
 `;
 

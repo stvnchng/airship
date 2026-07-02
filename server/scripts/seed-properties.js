@@ -12,13 +12,14 @@ const insertProperty = db.prepare(`
   VALUES (?, ?, NULL, ?)
 `);
 
-const insertPropertyTenant = db.prepare(`
-  INSERT OR IGNORE INTO property_tenants (property_id, tenant_id)
+const insertTenantProperty = db.prepare(`
+  INSERT OR IGNORE INTO tenant_property (tenant_id, property_id)
   VALUES (?, ?)
 `);
 
 const tenantExists = db.prepare(`SELECT 1 FROM tenants WHERE id = ?`);
 const propertyExists = db.prepare(`SELECT id, name FROM properties WHERE id = ?`);
+const assignedProperty = db.prepare(`SELECT property_id FROM tenant_property WHERE tenant_id = ?`);
 
 let propertiesInserted = 0;
 let propertiesSkipped = 0;
@@ -30,7 +31,6 @@ const seed = db.transaction(() => {
     const existing = propertyExists.get(prop.id);
 
     if (existing) {
-      // Duplicate ID — keep first occurrence, skip the rest
       console.warn(
         `[SKIP] Duplicate property id "${prop.id}": ` +
         `keeping "${existing.name}", skipping "${prop.name}"`
@@ -41,7 +41,6 @@ const seed = db.transaction(() => {
       propertiesInserted++;
     }
 
-    // Link tenants regardless — first-wins on the PK if there's overlap
     for (const tenantId of prop.tenant_ids) {
       if (!tenantExists.get(tenantId)) {
         console.warn(
@@ -50,10 +49,14 @@ const seed = db.transaction(() => {
         tenantLinksSkipped++;
         continue;
       }
-      const result = insertPropertyTenant.run(prop.id, tenantId);
+      const result = insertTenantProperty.run(tenantId, prop.id);
       if (result.changes > 0) {
         tenantLinksInserted++;
       } else {
+        const already = assignedProperty.get(tenantId);
+        console.warn(
+          `[SKIP] Tenant ${tenantId} already assigned to "${already.property_id}", skipping "${prop.id}"`
+        );
         tenantLinksSkipped++;
       }
     }

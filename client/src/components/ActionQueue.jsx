@@ -116,11 +116,9 @@ function QueueRow({ item, onMatch, onIgnore, onEditSize }) {
                 style={{ textAlign: 'left' }}
               >
                 <div style={{ fontWeight: 500 }}>{match.name}</div>
-                {match.address1 && (
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '1px' }}>
-                    {match.address1}, {match.city}
-                  </div>
-                )}
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '1px' }}>
+                  {match.address1 ? `${match.address1}, ${match.city} · ` : ''}#{match.id}
+                </div>
               </button>
             )) : (
               <span style={{ fontSize: '12px', color: '#94A3B8' }}>No candidates found — dismiss if this row can't be matched.</span>
@@ -151,7 +149,7 @@ function SizeEditor({ value, onChange, onSave, autoFocus }) {
         className="btn-primary"
         onClick={onSave}
         disabled={!value.trim()}
-        style={{ fontSize: '12px', padding: '6px 12px' }}
+        style={{ fontSize: '12px', padding: '6px 12px', width: 'auto' }}
       >
         Save size
       </button>
