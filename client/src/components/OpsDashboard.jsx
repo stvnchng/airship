@@ -60,8 +60,11 @@ export default function OpsDashboard() {
     fetch(url)
       .then(res => res.json())
       .then(data => {
-        if (type === 'eligible') { setEligibleList(data.tenants || []); setEligibilityChecked(true); }
-        else setImportList(data.imports || []);
+        if (type === 'eligible') {
+          setEligibleList(data.tenants || []);
+          setEligibilityChecked(true);
+          setMetrics(prev => ({ ...prev, eligibleTenants: data.count }));
+        } else setImportList(data.imports || []);
       })
       .catch(() => toast.error('Failed to load data'))
       .finally(() => setPanelLoading(false));
@@ -72,7 +75,7 @@ export default function OpsDashboard() {
     formData.append('file', file);
     return fetch('/api/ingest', { method: 'POST', body: formData })
       .then(res => { if (!res.ok) return res.json().then(e => { throw new Error(e.error); }); return res.json(); })
-      .then(data => { toast.success(data.message); refreshDashboard(); })
+      .then(data => { toast.success(data.message); refreshDashboard(); setEligibleList([]); setEligibilityChecked(false); })
       .catch(err => { toast.error(err.message); throw err; });
   };
 

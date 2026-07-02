@@ -53,6 +53,30 @@ Stores the full generated CSV. Exists because the export commits `shipments` row
 
 ---
 
+## Data Observations
+
+Things noticed about the provided data that directly informed implementation decisions.
+
+**`enrollments.riders` is not normalized.** The column stores a PostgreSQL array-style string (`{val1,val2,...}`) from the original schema. The air-filter rider appears under two different labels — both can appear in the same row: `"Free Airfilters Delivery"` and `"Airfilters Delivery ($4)"`. Matching requires `LIKE '%Airfilters Delivery%'` rather than an equality check.
+
+**ShipStation CSV zip codes are inconsistent.** The provided `shipstation-export.csv` has three zip formats in the same file: 4-digit truncated (e.g. `3095` instead of `03095`), standard 5-digit, and ZIP+4 (e.g. `92328-6076`). Tenant records in the DB use 5-digit or ZIP+4. `normalizeZip()` handles all three: strips non-digits, takes the first 5, left-pads to 5 characters. SQL compares against `substr(zip, 1, 5)`.
+
+**`shipstation-export.csv` uses `shipment_id` not `tracking_number`.** The column used as the dedup key and stored in `historical_shipments.tracking_number` is ShipStation's internal shipment ID (`se-216966616` style), not a carrier tracking number. It's stable and unique within ShipStation, so it works for dedup, but it's not the UPS/FedEx tracking number a tenant would look up.
+
+**`custom_field_1` can contain multiple space-separated sizes.** 9 of 195 rows in the provided CSV have values like `"14x20x1 20x20x1"`. These are stored verbatim — the spec notes that sizes "may lack the structure that a real API would require," and storing verbatim passes the value through to the export CSV unchanged.
+
+**`properties.json` has two data quality issues.** The property ID `prop-riverbend` appears twice with different intervals (90 days and 45 days). Two tenants are also listed more than once: tenant 135452 appears in both `prop-oak-terrace` and `prop-oak-overflow`; tenant 145566 appears in both `prop-riverbend` entries. Both issues require a defined fallback — see Loading `properties.json`.
+
+**Two tenants share identical name and address.** Tenants 900001 and 900002 are both named Casey Morgan at `1188 Maple Loop, Apt. 4B, Springfield, IL 62704` — indistinguishable by any field except their ID. This is what makes `ambiguous_match` necessary: name+zip matching correctly identifies the conflict but cannot resolve it automatically.
+
+**36 tenants have no property assignment.** 126 tenants are in the DB; only 90 appear in `properties.json`. The 36 without a property assignment have no interval to evaluate against and are excluded from eligibility entirely.
+
+**Most enrollments are inactive.** `schema.sql` contains 1,258 enrollment rows, but 1,044 have `active = false` — only 214 are active. All rows are loaded into the DB by `reset.sh`; most tenants appear ineligible because their enrollment is inactive, not because data is missing.
+
+**The fixture data spans dates both before and after "today."** `historical_shipments` is pre-seeded with ship dates ranging from `2025-10-15` to `2026-05-15`. The future-dated record (`2026-05-15`, source `scheduled_order`) is beyond the hardcoded `asOf` of `2026-04-24` and is correctly excluded by `WHERE ship_date <= @asOf`. The presence of pre-seeded historical records also means `MAX(ship_date)` cannot serve as a proxy for "has an import occurred" — `import_log` was added for that purpose.
+
+---
+
 ## Assumptions & Decisions
 
 ### Eligibility
@@ -107,17 +131,11 @@ The `shipments` INSERT is committed before the CSV is streamed. A dismissed down
 
 ---
 
-## Known Limitations
-
-- **Synchronous import** — `importService.js` processes every row in one blocking call. Fine at ~195 rows; would stall the event loop on 10,000+. Fix: worker thread or async SQLite driver.
-- **Import history capped at 50 rows** — display cap only; underlying data is complete. Would need pagination at scale.
-- **Tracking number sync gap** — tracking numbers return from ShipStation after fulfillment with no write-back to `shipments`. "Last shipped" dates for tenants exported by this tool lag by one import cycle.
-
----
-
 ## Potential Improvements
 
-- **List views** — eligible tenants list loads fully into client memory; import history is capped at 50. At scale: server-side pagination for import history, virtual scrolling (`react-window`) or name search for the eligible list.
-- **Automated ShipStation sync** — manual CSV upload is a stand-in. ShipStation webhooks could push confirmed shipments automatically, eliminating the import-before-export dependency.
+- **Synchronous import** — `importService.js` processes every row in one blocking call. Fine at ~195 rows; would stall the event loop on 10,000+. Fix: worker thread or async SQLite driver.
+- **List views** — eligible tenants list loads fully into client memory; import history is capped at 50 rows. At scale: server-side pagination for import history, virtual scrolling (`react-window`) or name search for the eligible list.
+- **Tracking number write-back** — tracking numbers return from ShipStation after fulfillment with no mechanism to write them back to `shipments`. "Last shipped" dates for tenants exported by this tool lag by one import cycle until the next ShipStation import.
+- **Automated ShipStation sync** — manual CSV upload is a stand-in.
 - **Fuzzy name matching** — current matching requires exact name (case-insensitive). A Levenshtein threshold would catch typos at the cost of more `ambiguous_match` flags.
 - **Multi-property support** — only the `UNIQUE tenant_id` constraint on `tenant_property` needs to be dropped. The eligibility query already handles multiple property rows per tenant correctly: `recently_shipped` checks each interval independently, and UNION means a tenant is blocked if they're within any interval — equivalent to using the longest one.
