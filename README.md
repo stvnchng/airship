@@ -94,9 +94,8 @@ Things noticed about the provided data that directly informed implementation dec
 |---|---|
 | Two entries share the same property ID | First entry wins; second is skipped with a warning. |
 | One tenant is listed under two different properties | First assignment wins; second is skipped with a warning. |
-| Tenant IDs that don't exist in the `tenants` table | Skipped with a warning — no link created. |
 
-In all three cases the script logs a warning rather than failing, so setup completes with the remaining clean data intact.
+In both cases the script logs a warning rather than failing, so setup completes with the remaining clean data intact.
 
 ### ShipStation Import Matching & Manual Review
 
@@ -110,11 +109,11 @@ The spec says to match on name, address, or a combination. We use **name + zip**
 | `ambiguous_match` | 2+ tenants share the same name and zip | Confirm which tenant this shipment belongs to, or dismiss |
 | `no_filter_size` | Matched confidently, but `custom_field_1` is blank | Enter the filter size if known, or dismiss to skip — the spec says size issues should not block processing |
 
-**Zip normalization:** ShipStation exports omit leading zeros (e.g. `3095` instead of `03095`). `normalizeZip()` strips non-digits and left-pads to 5 characters; SQL compares against `substr(zip, 1, 5)` to handle ZIP+4 suffixes.
+**Zip normalization:** ShipStation exports have inconsistent zip formats (4-digit truncated, 5-digit, ZIP+4 in the same file). `normalizeZip()` strips non-digits and left-pads to 5 characters; SQL compares against `substr(zip, 1, 5)`.
 
 ### Filter sizes
 
-`custom_field_1` cells may contain multiple space-separated sizes (e.g. `"14x20x1 20x20x1"`). We store the raw string verbatim — the spec notes sizes "may lack the structure that a real API would require" and storing verbatim passes the value through to the export CSV unchanged. For the export, `custom_field_1` comes from the tenant's most recent `historical_shipments` row as of the export date. If no size is on record the field is blank in the export — the `no_filter_size` review flag surfaces these rows so an operator can fill in the size, but dismiss is allowed per the spec ("capture enough information for follow-up without blocking").
+`custom_field_1` cells may contain multiple space-separated sizes (e.g. `"14x20x1 20x20x1"`). Stored verbatim per spec: "may lack the structure that a real API would require." For the export, size comes from the tenant's most recent `historical_shipments` row. If no size exists the field is blank; the `no_filter_size` review flag surfaces these before export, but dismiss is allowed — the spec says size issues should not block processing.
 
 ### Export gates
 
@@ -123,7 +122,7 @@ Two conditions intercept export with a popup confirmation dialog:
 1. **Pending manual review items** — checked first. Unresolved rows may have incorrect tenant links or missing filter sizes.
 2. **No ShipStation data imported** — checked second. Without an import, tenants who already received a filter won't be excluded from the eligible count.
 
-Both are overridable. The review-items check fires first so operators can't bypass the more critical data-quality warning by seeing only the import warning. The gate uses `import_log` rather than inferring from ship dates — see Data Model.
+Both are overridable. The review-items check fires first so the more critical data-quality warning can't be bypassed by triggering only the import warning. The gate uses `import_log` rather than inferring from ship dates (see Data Model).
 
 ### Export commit before CSV delivery
 
