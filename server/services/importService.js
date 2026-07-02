@@ -4,32 +4,68 @@ const db = require('../db');
 const INSERT_SHIPMENT = db.prepare(`
   INSERT INTO historical_shipments
     (tenant_id, recipient_name, address1, address2, city, state, zip,
-     ship_date, tracking_number, source, custom_field_1)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ShipStation Import', ?)
+     ship_date, tracking_number, source, custom_field_1, review_reason)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ShipStation Import', ?, ?)
 `);
 
 const FIND_DUPLICATE = db.prepare(
   'SELECT 1 FROM historical_shipments WHERE tracking_number = ?'
 );
 
-// Name + zip must both match to be considered a confident automatic match.
-// Name-only risks false positives across the dataset; zip-only is almost
-// certain to collide. Together they're still not perfect but confident enough
-// to auto-link without manual review.
+// Count how many tenants match name+zip before committing to one.
+// More than one match means we cannot auto-select with confidence.
+const COUNT_MATCHES = db.prepare(`
+  SELECT COUNT(*) as n FROM tenants
+  WHERE lower(first_name) = lower(?)
+    AND lower(last_name)  = lower(?)
+    AND substr(zip, 1, 5) = ?
+`);
+
+// Name + zip must both match to be a confident auto-link.
+// Zip normalization: ShipStation CSVs sometimes omit the leading zero
+// (e.g. "3095" instead of "03095"). We left-pad to 5 digits and compare
+// against substr(zip, 1, 5) to handle both 5- and ZIP+4 formats.
 const FIND_TENANT_BY_NAME_AND_ZIP = db.prepare(`
   SELECT id FROM tenants
   WHERE lower(first_name) = lower(?)
     AND lower(last_name)  = lower(?)
-    AND zip LIKE ?
+    AND substr(zip, 1, 5) = ?
   LIMIT 1
 `);
 
-function matchTenant(record) {
-  const parts = record.name.trim().split(/\s+/);
+function normalizeZip(raw) {
+  return (raw || '').replace(/[^0-9]/g, '').substring(0, 5).padStart(5, '0');
+}
+
+// Returns { tenantId, reviewReason }
+// reviewReason is null for clean matches, set when human review is needed.
+function classify(row) {
+  const parts = row.name.trim().split(/\s+/);
   const firstName = parts[0] || '';
   const lastName  = parts.slice(1).join(' ') || '';
-  const zipPrefix = record.zip.substring(0, 5);
-  return FIND_TENANT_BY_NAME_AND_ZIP.get(firstName, lastName, `${zipPrefix}%`);
+  const zip       = normalizeZip(row.zip);
+
+  const { n } = COUNT_MATCHES.get(firstName, lastName, zip);
+
+  if (n === 0) {
+    return { tenantId: null, reviewReason: 'unmatched' };
+  }
+
+  const tenant = FIND_TENANT_BY_NAME_AND_ZIP.get(firstName, lastName, zip);
+
+  if (n > 1) {
+    // Multiple tenants share the same name+zip — auto-select the first but
+    // flag so Doug can confirm the right one. Not safe to silently pick.
+    return { tenantId: tenant.id, reviewReason: 'ambiguous_match' };
+  }
+
+  if (!row.custom_field_1) {
+    // Matched confidently, but no filter size. Export CSV will have a blank
+    // custom_field_1, which ShipStation can't act on.
+    return { tenantId: tenant.id, reviewReason: 'no_filter_size' };
+  }
+
+  return { tenantId: tenant.id, reviewReason: null };
 }
 
 function processImport(fileBuffer) {
@@ -39,7 +75,7 @@ function processImport(fileBuffer) {
     trim: true,
   });
 
-  let matched = 0, unresolved = 0, skipped = 0;
+  let matched = 0, flagged = 0, skipped = 0;
 
   db.transaction((rows) => {
     for (const row of rows) {
@@ -50,11 +86,10 @@ function processImport(fileBuffer) {
         continue;
       }
 
-      const tenant = matchTenant(row);
-      const tenantId = tenant ? tenant.id : null;
-      if (tenantId) matched++; else unresolved++;
+      const { tenantId, reviewReason } = classify(row);
+      if (tenantId && !reviewReason) matched++;
+      else flagged++;
 
-      // Normalize ISO timestamps (e.g. "2026-01-15T08:00:00Z") to plain dates
       const shipDate = row.ship_date ? row.ship_date.substring(0, 10) : null;
 
       INSERT_SHIPMENT.run(
@@ -68,11 +103,12 @@ function processImport(fileBuffer) {
         shipDate,
         trackingNum,
         row.custom_field_1 || null,
+        reviewReason,
       );
     }
   })(records);
 
-  return { total: records.length, matched, unresolved, skipped };
+  return { total: records.length, matched, flagged, skipped };
 }
 
-module.exports = { processImport };
+module.exports = { processImport, normalizeZip };

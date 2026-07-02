@@ -135,9 +135,9 @@ Picture Doug, an ops coordinator: he opens this with no engineer nearby and need
 ## What We're Looking For
 
 - **Correctness** — does the system behave as specified?
-- **Code clarity** — is the code readable and sensibly organized?
+- **Code clarity** — is the code readable and organized?
 - **Judgment** — did you make reasonable decisions in ambiguous areas and explain them?
 - **Completeness** — are all five requirements represented, even if some are minimal?
 - **Operator experience** — could a non-technical ops user run this day-to-day without an engineer or database access?
 
-We are _not_ grading visual polish, choice of framework, or lines of code. We **are** grading whether your interface lets a real operator do the job. A simple, well-reasoned implementation beats a complex one that's hard to follow.
+Most important - does interface lets a real operator do the job. A simple, well-reasoned implementation beats a complex one that's hard to follow.

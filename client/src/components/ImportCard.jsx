@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import Spinner from './Spinner';
 
 export default function ImportCard({ onUploadSuccess }) {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -91,11 +92,3 @@ export default function ImportCard({ onUploadSuccess }) {
   );
 }
 
-function Spinner() {
-  return (
-    <svg style={{ width: 14, height: 14, animation: 'spin 0.8s linear infinite' }} viewBox="0 0 24 24" fill="none">
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="40" strokeDashoffset="15" strokeLinecap="round" />
-    </svg>
-  );
-}

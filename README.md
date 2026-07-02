@@ -52,9 +52,43 @@ Seeding runs as a separate step (`npm run seed-properties`) after fixtures, not 
 | `prop-oak-overflow` lists tenant 135452, already in `prop-oak-terrace` | Both links kept. Eligibility uses longest interval (120 days). |
 | Tenant IDs not present in `tenants` | Skipped with a warning. Only affects `prop-maple-loop` if fixtures haven't run. |
 
-### ShipStation Import Matching
+### ShipStation Import Matching & Manual Review Criteria
 
-Automatic match requires both name and address to agree (case-insensitive, trimmed). Either alone is not treated as confident — address reuse across tenants and name typos are both common enough to warrant manual review over a bad auto-match.
+Automatic match requires both name and zip to agree (case-insensitive, trimmed). Either alone is not treated as confident — address reuse across tenants and name typos are both common enough to warrant manual review over a bad auto-match.
+
+**A row is flagged for manual review under three conditions:**
+
+| Reason | What it means | Required action |
+|---|---|---|
+| `unmatched` | No tenant found with the same name + zip | Pick the correct tenant from the suggested candidates, or dismiss |
+| `ambiguous_match` | 2+ tenants share the same name and zip — auto-select is not safe | Confirm which tenant this shipment belongs to, or dismiss if uncertain |
+| `no_filter_size` | Tenant matched confidently, but `custom_field_1` is blank in the CSV | Enter the filter size — export CSV will have a blank `custom_field_1` otherwise, which ShipStation cannot act on |
+
+**What does not get flagged:** a row with a single confident name+zip match and a non-empty filter size is auto-linked and never surfaces to the queue.
+
+**From the provided `shipstation-export.csv` (195 rows):** 191 matched cleanly, 4 were skipped as duplicates, and 2 were flagged:
+- **Casey Morgan** (`ambiguous_match`) — two tenant records share the same name and address (`1188 Maple Loop, Springfield IL 62704`). These are the `prop-maple-loop` test fixtures (IDs 900001, 900002). They are genuinely indistinguishable by name or address alone.
+- **Seymour Gerlach** (`no_filter_size`) — name+zip matched to tenant 135437, but the CSV row had no `custom_field_1`. The size editor is pre-opened on this row in the review queue.
+
+**Zip normalization:** ShipStation exports omit leading zeros on zip codes (e.g. `3095` instead of `03095`). Tenant records use full 5-digit zips, sometimes with ZIP+4 suffix (e.g. `03095-1234`). Without normalization, every row whose zip has a leading zero fails to match, silently landing in the manual review queue.
+
+Fix: `normalizeZip()` in `importService.js` strips non-digits and left-pads to 5 characters before matching; the SQL compares against `substr(zip, 1, 5)` to handle ZIP+4 on the tenant side. This fix applies to both auto-matching during import and the potential-matches lookup in the review queue.
+
+### Import-before-export ordering dependency
+
+The eligibility engine's accuracy depends on `historical_shipments` being current. A fresh deployment with no ShipStation data imported will show an inflated eligible count — tenants who already received a filter won't be excluded because the system has no record of it.
+
+The double-ship guard (Req 2.4) only protects against running the same export twice in the same session. It does not protect against exporting before syncing back ShipStation's confirmation of prior deliveries — those are two separate failure modes.
+
+**Mitigation:** The export button checks whether any ShipStation data has been imported (`lastImportDate` in the dashboard response). If none exists, it intercepts the export with a blocking confirmation warning Doug that the eligible count may be overstated. He can still override, but the path of least resistance is to import first.
+
+**Longer-term fix:** In production this would be automated ShipStation sync rather than manual CSV upload, which eliminates the ordering problem entirely. The manual upload is a stand-in for that sync; the gate is a safeguard for the interim.
+
+### Export commit before CSV delivery
+
+The `shipments` insert is committed to the database before the CSV is streamed to the browser. If Doug dismisses the download or can't find the file, those tenants are already marked as ordered and won't appear in the next eligibility check until their interval expires.
+
+**Mitigation:** Each export is saved in full to the `export_batches` table (CSV content, date, tenant count). A *Re-download last export* link in the UI fetches `GET /api/export/last` to serve the stored CSV without creating new shipment records. The UI also requires an explicit eligibility check before each export, and resets that gate after export completes, prompting Doug to confirm the previous batch was sent before starting the next one.
 
 ### `shipments.tracking_number`
 

@@ -12,6 +12,7 @@ app.use('/api/eligibility', require('./routes/eligibility'));
 app.use('/api/ingest',      require('./routes/ingest'));
 app.use('/api/imports',     require('./routes/imports'));
 app.use('/api/export',      require('./routes/export'));
+app.use('/api/queue',       require('./routes/queue'));
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);

@@ -4,6 +4,16 @@ import ImportCard from './ImportCard';
 import ExportCard from './ExportCard';
 import ActionQueue from './ActionQueue';
 import SlideOver from './SlideOver';
+import Spinner from './Spinner';
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 const DEFAULT_DATE = '2026-04-24';
 
@@ -15,10 +25,12 @@ function daysSince(dateStr, asOf) {
 
 export default function OpsDashboard() {
   const [asOf, setAsOf]               = useState(DEFAULT_DATE);
-  const [metrics, setMetrics]         = useState({ eligibleTenants: 0, pendingExport: 0, awaitingReview: 0, successfullyMatched: 0 });
+  const [metrics, setMetrics]         = useState({ eligibleTenants: 0, awaitingReview: 0, successfullyMatched: 0 });
   const [reviewItems, setReviewItems] = useState([]);
   const [checkingEligibility, setCheckingEligibility] = useState(false);
+  const [eligibilityChecked, setEligibilityChecked] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportNeedsConfirm, setExportNeedsConfirm] = useState(false);
 
   // Slide-over state
   const [panel, setPanel]               = useState(null); // 'eligible' | 'imports'
@@ -36,17 +48,18 @@ export default function OpsDashboard() {
       .catch(err => toast.error(err.message));
   }, [asOf]);
 
-  useEffect(() => { refreshDashboard(); }, [refreshDashboard]);
+  useEffect(() => { refreshDashboard(); setEligibilityChecked(false); setEligibleList([]); }, [refreshDashboard]);
 
   const openPanel = (type) => {
     setPanel(type);
-    setPanelLoading(true);
+    if (type === 'eligible' && eligibleList.length > 0) return;
 
+    setPanelLoading(true);
     const url = type === 'eligible' ? `/api/eligibility?asOf=${asOf}` : '/api/imports/recent';
     fetch(url)
       .then(res => res.json())
       .then(data => {
-        if (type === 'eligible') setEligibleList(data.tenants || []);
+        if (type === 'eligible') { setEligibleList(data.tenants || []); setEligibilityChecked(true); }
         else setImportList(data.imports || []);
       })
       .catch(() => toast.error('Failed to load data'))
@@ -69,6 +82,7 @@ export default function OpsDashboard() {
       .then(data => {
         setMetrics(prev => ({ ...prev, eligibleTenants: data.count }));
         setEligibleList(data.tenants || []);
+        setEligibilityChecked(true);
         toast.success(`${data.count} tenant${data.count !== 1 ? 's' : ''} ready to ship as of ${data.asOf}`);
       })
       .catch(() => toast.error('Eligibility check failed'))
@@ -76,18 +90,33 @@ export default function OpsDashboard() {
   };
 
   const handleResolveMatch = (rowId, tenantId, tenantName) => {
-    setReviewItems(prev => prev.filter(item => item.id !== rowId));
-    setMetrics(prev => ({ ...prev, awaitingReview: Math.max(0, prev.awaitingReview - 1), successfullyMatched: prev.successfullyMatched + 1 }));
-    toast.success(`Linked to ${tenantName}`);
+    fetch(`/api/queue/${rowId}/resolve`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tenantId }),
+    })
+      .then(res => { if (!res.ok) throw new Error('Failed to resolve'); })
+      .then(() => {
+        setReviewItems(prev => prev.filter(item => item.id !== rowId));
+        setMetrics(prev => ({ ...prev, awaitingReview: Math.max(0, prev.awaitingReview - 1), successfullyMatched: prev.successfullyMatched + 1 }));
+        toast.success(`Linked to ${tenantName}`);
+      })
+      .catch(err => toast.error(err.message));
   };
 
   const handleIgnoreRow = (rowId) => {
-    setReviewItems(prev => prev.filter(item => item.id !== rowId));
-    setMetrics(prev => ({ ...prev, awaitingReview: Math.max(0, prev.awaitingReview - 1) }));
-    toast('Row dismissed');
+    fetch(`/api/queue/${rowId}`, { method: 'DELETE' })
+      .then(res => { if (!res.ok) throw new Error('Failed to dismiss'); })
+      .then(() => {
+        setReviewItems(prev => prev.filter(item => item.id !== rowId));
+        setMetrics(prev => ({ ...prev, awaitingReview: Math.max(0, prev.awaitingReview - 1) }));
+        toast('Row dismissed');
+      })
+      .catch(err => toast.error(err.message));
   };
 
-  const handleExport = () => {
+  const runExport = () => {
+    setExportNeedsConfirm(false);
     setExporting(true);
     fetch(`/api/export?asOf=${asOf}`, { method: 'POST' })
       .then(res => {
@@ -95,30 +124,56 @@ export default function OpsDashboard() {
         return res.blob();
       })
       .then(blob => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `shipment-export-${asOf}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        downloadBlob(blob, `shipment-export-${asOf}.csv`);
         toast.success(`Exported ${metrics.eligibleTenants} shipment${metrics.eligibleTenants !== 1 ? 's' : ''}`);
         setPanel(null);
         setEligibleList([]);
+        setEligibilityChecked(false);
         refreshDashboard();
       })
       .catch(err => toast.error(err.message || 'Export failed'))
       .finally(() => setExporting(false));
   };
 
-  const handleEditSize = (rowId) => {
-    const target = reviewItems.find(item => item.id === rowId);
-    const newSize = prompt(`Edit filter size for ${target.name}:`, target.csv_size);
-    if (newSize !== null && newSize !== target.csv_size) {
-      setReviewItems(prev => prev.map(item => item.id === rowId ? { ...item, csv_size: newSize } : item));
-      toast.success('Filter size updated');
+  const handleExport = () => {
+    if (!eligibilityChecked) {
+      toast.error('Run an eligibility check first.');
+      return;
     }
+    if (!metrics.lastImportDate) {
+      setExportNeedsConfirm(true);
+      return;
+    }
+    runExport();
+  };
+
+  const handleRedownload = () => {
+    fetch('/api/export/last')
+      .then(res => { if (!res.ok) throw new Error('No export found'); return res.blob(); })
+      .then(blob => {
+        downloadBlob(blob, `shipment-export-${metrics.lastExport?.as_of ?? 'last'}.csv`);
+        toast.success('Re-downloaded last export');
+      })
+      .catch(err => toast.error(err.message));
+  };
+
+  const handleEditSize = (rowId, newSize) => {
+    fetch(`/api/queue/${rowId}/size`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ size: newSize }),
+    })
+      .then(res => { if (!res.ok) throw new Error('Failed to save size'); return res.json(); })
+      .then(({ stillInQueue }) => {
+        if (!stillInQueue) {
+          setReviewItems(prev => prev.filter(item => item.id !== rowId));
+          setMetrics(prev => ({ ...prev, awaitingReview: Math.max(0, prev.awaitingReview - 1) }));
+        } else {
+          setReviewItems(prev => prev.map(item => item.id === rowId ? { ...item, csv_size: newSize } : item));
+        }
+        toast.success('Filter size saved');
+      })
+      .catch(err => toast.error(err.message));
   };
 
   return (
@@ -136,7 +191,7 @@ export default function OpsDashboard() {
         padding: '0 20px',
       }}>
         <span className="mono" style={{ fontWeight: 600, fontSize: '13px', letterSpacing: '0.1em', color: 'white' }}>
-          FILTERFLOW
+          Airship
         </span>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -198,8 +253,14 @@ export default function OpsDashboard() {
             onCalculate={handleCalculateEligibility}
             eligibleCount={metrics.eligibleTenants}
             loading={checkingEligibility}
+            eligibilityChecked={eligibilityChecked}
             onExport={handleExport}
+            onConfirmExport={runExport}
+            onCancelExport={() => setExportNeedsConfirm(false)}
+            needsConfirm={exportNeedsConfirm}
             exporting={exporting}
+            lastExport={metrics.lastExport}
+            onRedownload={handleRedownload}
           />
         </aside>
 
@@ -258,9 +319,10 @@ export default function OpsDashboard() {
                   </div>
                 )}
               </div>
-              <span className="size-badge" style={{ flexShrink: 0 }}>
-                {t.last_filter_size || '—'}
-              </span>
+              {t.last_filter_size
+                ? <span className="size-badge" style={{ flexShrink: 0 }}>{t.last_filter_size}</span>
+                : <span style={{ flexShrink: 0, fontSize: '11px', color: '#94A3B8' }}>no size on record</span>
+              }
             </div>
           ))
         )}
@@ -291,9 +353,10 @@ export default function OpsDashboard() {
                   {row.ship_date} · {row.tracking_number}
                 </div>
               </div>
-              <span className="size-badge" style={{ flexShrink: 0 }}>
-                {row.filter_size || '—'}
-              </span>
+              {row.filter_size
+                ? <span className="size-badge" style={{ flexShrink: 0 }}>{row.filter_size}</span>
+                : <span style={{ flexShrink: 0, fontSize: '11px', color: '#94A3B8' }}>no size</span>
+              }
             </div>
           ))
         )}
@@ -304,10 +367,8 @@ export default function OpsDashboard() {
 
 function PanelSpinner() {
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
-      <svg style={{ width: 20, height: 20, animation: 'spin 0.8s linear infinite', color: 'var(--text-muted)' }} viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="40" strokeDashoffset="15" strokeLinecap="round" />
-      </svg>
+    <div style={{ display: 'flex', justifyContent: 'center', padding: '48px', color: 'var(--text-muted)' }}>
+      <Spinner size={20} />
     </div>
   );
 }
