@@ -114,7 +114,7 @@ export default function OpsDashboard() {
       .then(() => {
         setReviewItems(prev => prev.filter(item => item.id !== rowId));
         setMetrics(prev => ({ ...prev, awaitingReview: Math.max(0, prev.awaitingReview - 1) }));
-        toast('Row dismissed');
+        toast('Dismissed');
       })
       .catch(err => toast.error(err.message));
   };
@@ -146,15 +146,15 @@ export default function OpsDashboard() {
     }
     if (metrics.awaitingReview > 0) {
       setConfirmDialog({
-        title: 'Unresolved manual review items',
-        body: `${metrics.awaitingReview} shipment row${metrics.awaitingReview !== 1 ? 's' : ''} still need${metrics.awaitingReview === 1 ? 's' : ''} review. Exporting now may include rows with missing data or incorrect tenant links.`,
+        title: 'Review queue is not empty',
+        body: `${metrics.awaitingReview} item${metrics.awaitingReview !== 1 ? 's' : ''} still need${metrics.awaitingReview === 1 ? 's' : ''} attention. Exporting now may include missing filter sizes or incorrect tenant links.`,
       });
       return;
     }
     if (!metrics.lastImportDate) {
       setConfirmDialog({
         title: 'No ShipStation data imported',
-        body: 'The eligible count may be overstated — tenants who already received a filter won\'t be excluded because no import has been done yet.',
+        body: 'No ShipStation data has been imported yet. Tenants who already received a filter this cycle may not be excluded from the results.',
       });
       return;
     }
@@ -353,7 +353,7 @@ export default function OpsDashboard() {
         isOpen={panel === 'imports'}
         onClose={() => setPanel(null)}
         title="Import history"
-        subtitle={`Last ${importList.length} matched shipments`}
+        subtitle={`Last ${importList.length} imported shipments`}
       >
         {panelLoading ? (
           <PanelSpinner />

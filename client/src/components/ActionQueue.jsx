@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 const REASON_META = {
   unmatched:       { label: 'Unmatched',  instruction: 'Pick the correct tenant or dismiss.' },
-  ambiguous_match: { label: 'Ambiguous',  instruction: 'Two tenants share this name and address — confirm which one.' },
+  ambiguous_match: { label: 'Ambiguous',  instruction: 'Two tenants share this name and address. Pick the correct one or dismiss.' },
   no_filter_size:  { label: 'No size',    instruction: 'Add a filter size if known, or dismiss to skip.' },
 };
 
@@ -13,7 +13,7 @@ export default function ActionQueue({ items = [], onMatch, onIgnore, onEditSize 
         <div>
           <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text)' }}>Review queue</h2>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '3px' }}>
-            Each row has one required action. Complete it or dismiss to clear the queue.
+            Resolve or dismiss each row to clear the queue.
           </p>
         </div>
         {items.length > 0 && (
@@ -98,7 +98,7 @@ function QueueRow({ item, onMatch, onIgnore, onEditSize }) {
         <div>
           {item.review_reason === 'ambiguous_match' && item.potentialMatches.length > 1 && (
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
-              These records share the same name and address — pick the one ShipStation shipped to, or dismiss if uncertain.
+              These records share the same name and address. Pick the one ShipStation shipped to, or dismiss if uncertain.
             </div>
           )}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -115,7 +115,7 @@ function QueueRow({ item, onMatch, onIgnore, onEditSize }) {
                 </div>
               </button>
             )) : (
-              <span style={{ fontSize: '12px', color: '#94A3B8' }}>No candidates found — dismiss if this row can't be matched.</span>
+              <span style={{ fontSize: '12px', color: '#94A3B8' }}>No candidates found. Dismiss if this row can't be matched.</span>
             )}
           </div>
         </div>

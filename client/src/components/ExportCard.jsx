@@ -10,12 +10,12 @@ export default function ExportCard({
     <div style={{ padding: '20px' }}>
 
       {/* Step 02 — Eligibility */}
-      <div className="step-number" style={{ marginBottom: '10px' }}>02 — Who's due</div>
+      <div className="step-number" style={{ marginBottom: '10px' }}>02: Who's due</div>
       <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '4px' }}>
         Check eligibility
       </p>
       <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '14px', lineHeight: 1.5 }}>
-        Finds tenants with an active air-filter rider who haven't received a shipment within their property's interval.
+        Finds tenants with an active filter subscription who are due for their next shipment.
       </p>
 
       <button
@@ -48,12 +48,12 @@ export default function ExportCard({
       )}
 
       {/* Step 03 — Export */}
-      <div className="step-number" style={{ marginBottom: '10px', marginTop: '24px' }}>03 — Export</div>
+      <div className="step-number" style={{ marginBottom: '10px', marginTop: '24px' }}>03: Export</div>
       <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '4px' }}>
         Send to ShipStation
       </p>
       <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '14px', lineHeight: 1.5 }}>
-        Generates the shipment CSV and marks these tenants as ordered so they won't be included in the next run.
+        Generates a shipment CSV and marks tenants as ordered so they're excluded from the next run.
       </p>
 
       <>
@@ -91,7 +91,7 @@ export default function ExportCard({
             textAlign: 'left',
           }}
         >
-          Re-download last export — {lastExport.tenant_count} shipments, {lastExport.as_of}
+          Re-download last export ({lastExport.tenant_count} shipments, {lastExport.as_of})
         </button>
       )}
     </div>

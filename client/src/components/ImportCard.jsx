@@ -33,12 +33,12 @@ export default function ImportCard({ onUploadSuccess }) {
 
   return (
     <div style={{ padding: '20px' }}>
-      <div className="step-number" style={{ marginBottom: '10px' }}>01 — Import</div>
+      <div className="step-number" style={{ marginBottom: '10px' }}>01: Import</div>
       <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '4px' }}>
         Load ShipStation export
       </p>
       <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '14px', lineHeight: 1.5 }}>
-        Upload the CSV from ShipStation to match tracking data to tenants.
+        Upload a ShipStation CSV to import recent shipments and match them to tenants.
       </p>
 
       {/* Drop zone */}
